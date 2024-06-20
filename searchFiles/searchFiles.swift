@@ -24,6 +24,32 @@ struct searchFiles: ParsableCommand {
             actualPath = argString
         }
         print("Actual path to start the search \(actualPath)")
+        let actualURL = URL.init(fileURLWithPath: NSString(string: actualPath).expandingTildeInPath)
+        print("Actual URL is \(actualURL.standardizedFileURL)")
+        
+        let resourceKeys = Set<URLResourceKey>([.nameKey, .isDirectoryKey, .isRegularFileKey, .fileSizeKey])
+        if let file_enumerator = fileManager.enumerator(at: actualURL, includingPropertiesForKeys: Array(resourceKeys)) {
+            for case let fileURL as URL in file_enumerator {
+                guard let resourceValues = try? fileURL.resourceValues(forKeys: resourceKeys),
+                      let isDirectory = resourceValues.isDirectory,
+                      let name = resourceValues.name,
+                      let isRegularFile = resourceValues.isRegularFile,
+                      let fileSize = resourceValues.fileSize
+                else {
+                    continue
+                }
+                // determine which type of URL we are accessing
+                if isDirectory {
+                    if name == "_extras" {
+                        file_enumerator.skipDescendants()
+                    }
+                } else if isRegularFile {
+                    print("File to search: \(fileURL.path()) with size \(fileSize)")
+                }
+            }
+        } else {
+            print("**** File Enumerator was nil !!!")
+        }
     }
     
 }
