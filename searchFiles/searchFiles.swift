@@ -28,7 +28,11 @@ struct searchFiles: ParsableCommand {
         print("Actual URL is \(actualURL.standardizedFileURL)")
         
         let resourceKeys = Set<URLResourceKey>([.nameKey, .isDirectoryKey, .isRegularFileKey, .fileSizeKey])
-        if let file_enumerator = fileManager.enumerator(at: actualURL, includingPropertiesForKeys: Array(resourceKeys)) {
+        if let file_enumerator = fileManager.enumerator(at: actualURL, includingPropertiesForKeys: Array(resourceKeys),
+                                                        options: [.skipsHiddenFiles],
+                                                        errorHandler: { (url, error) -> Bool in
+                                                            print("directoryEnumerator error at \(url): ", error)
+            return true} ) {
             for case let fileURL as URL in file_enumerator {
                 guard let resourceValues = try? fileURL.resourceValues(forKeys: resourceKeys),
                       let isDirectory = resourceValues.isDirectory,
