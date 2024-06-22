@@ -10,8 +10,10 @@ import ArgumentParser
 
 @main
 struct searchFiles: AsyncParsableCommand {
-    @Argument (help: "path to search")
-    var searchPath: String?
+    @Argument (help: "Arguments combined for search string")
+        var searchStrings: [String] = []
+    @Option (help: "path to search")
+    var path: String?
     
     mutating func run() async throws {
         let fileManager = FileManager.default
@@ -19,13 +21,19 @@ struct searchFiles: AsyncParsableCommand {
         print("The current path is \(pwd)")
         
         var actualPath: String = pwd
-        if let argString = searchPath {
+        if let argString = path {
             print("Path argument is \(argString)")
             actualPath = argString
         }
-        print("Actual path to start the search \(actualPath)")
         let actualURL = URL.init(fileURLWithPath: NSString(string: actualPath).expandingTildeInPath)
         print("Actual URL is \(actualURL.standardizedFileURL)")
+        
+        // gather arguments to build search string
+        let searchString = searchStrings.joined(separator: " ")
+        if searchStrings.isEmpty {
+            print("No search string provided!!!")
+            return
+        }
         
         let resourceKeys = Set<URLResourceKey>([.nameKey, .isDirectoryKey, .isRegularFileKey, .fileSizeKey])
         if let file_enumerator = fileManager.enumerator(at: actualURL, includingPropertiesForKeys: Array(resourceKeys),
@@ -50,33 +58,28 @@ struct searchFiles: AsyncParsableCommand {
                             file_enumerator.skipDescendants()
                         }
                     } else if isRegularFile {
-                        print("File to search: \(fileURL.path()) with size \(fileSize) before addTask")
+//                        print("File to search: \(fileURL.path()) with size \(fileSize) before addTask")
                         taskgroup.addTask  {
                             let filePath = fileURL.path()
-                                print("  Before searchLineByLine()")
-                                let foundString = try await searchLineByLine(from: fileURL, with: "small")
-                                print("  After searchLineByLine() await")
-                                if foundString {
-                                    print("  File \(fileURL.standardizedFileURL) contains search string")
-                                }
-                                print("  After checking foundString result")
+                                let foundString = try await searchLineByLine(from: fileURL, with: searchString)
+//                                if foundString {
+//                                    print("  File \(fileURL.standardizedFileURL) contains search string")
+//                                }
                             return (filePath, foundString)
                         }
-                        print("after task, but inside for loop for file enumerator")
                     }
                 }
                 // return results from TaskGroup here
-                print("Gather child task results to return via TaskGroup")
                 var childTaskResults = [String: Bool]()
                 for try await result in taskgroup {
                     childTaskResults[result.0] = result.1
                 }
                 return childTaskResults
             }
-            print("after for loop for file enumerator")
             // Iterate through found results
-            print("Search Results:")
-            results.forEach { print($0) }
+            print("Files containing '\(searchString)' in \(actualPath):")
+            results.filter({$0.value == true}).forEach { print($0.key) }
+//            results.forEach { print($0) }
         } else {
             print("**** File Enumerator was nil !!!")
         }
@@ -85,14 +88,10 @@ struct searchFiles: AsyncParsableCommand {
 }
 
 func searchLineByLine(from fileUrl: URL, with searchString: String) async throws -> Bool {
-    print("    Entering searchLineByLine with \(fileUrl.standardizedFileURL) for string \(searchString)")
     var found: Bool = false
     do {
-        print("    inside do catch for searchLineByLine")
         let handle = try FileHandle(forReadingFrom: fileUrl)
-        print("    After getting handle for \(fileUrl.standardizedFileURL)")
         for try await line in handle.bytes.lines {
-            print("    processing: \(line)")
             if line.contains(searchString) {
                 found = true
                 break
@@ -102,6 +101,5 @@ func searchLineByLine(from fileUrl: URL, with searchString: String) async throws
     } catch {
         print("*** searchLineByLine getting file handle error \(error)")
     }
-    print("    Exiting searchLineByLine with result \(found)")
     return found
 }
