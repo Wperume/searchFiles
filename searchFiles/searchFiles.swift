@@ -12,7 +12,7 @@ import ArgumentParser
 struct searchFiles: AsyncParsableCommand {
     @Argument (help: "Arguments combined for search string")
         var searchStrings: [String] = []
-    @Option (help: "path to search")
+    @Option (name: .shortAndLong, help: "path to search")
     var path: String?
     
     mutating func run() async throws {
