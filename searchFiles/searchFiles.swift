@@ -1,6 +1,5 @@
 //
-//  main.swift
-//  searchFiles
+//  searchFiles: Example app for a command line tool using Swift with concurrency
 //
 //  Created by Dean Pulsifer on 6/18/24.
 //
@@ -9,7 +8,7 @@ import Foundation
 import ArgumentParser
 
 @main
-struct searchFiles: AsyncParsableCommand {
+struct searchFiles: AsyncParsableCommand { // use AsyncParsableCommand so that we can use async / await and TaskGroups
     @Argument (help: "Arguments combined for search string")
         var searchStrings: [String] = []
     @Option (name: .shortAndLong, help: "path to search")
@@ -18,7 +17,7 @@ struct searchFiles: AsyncParsableCommand {
     mutating func run() async throws {
         let fileManager = FileManager.default
         let pwd = fileManager.currentDirectoryPath
-        print("The current path is \(pwd)")
+//        print("The current path is \(pwd)")
         
         var actualPath: String = pwd
         if let argString = path {
@@ -26,7 +25,7 @@ struct searchFiles: AsyncParsableCommand {
             actualPath = argString
         }
         let actualURL = URL.init(fileURLWithPath: NSString(string: actualPath).expandingTildeInPath)
-        print("Actual URL is \(actualURL.standardizedFileURL)")
+        print("Expanded URL is \(actualURL.standardizedFileURL)")
         
         // gather arguments to build search string
         let searchString = searchStrings.joined(separator: " ")
@@ -41,9 +40,9 @@ struct searchFiles: AsyncParsableCommand {
                                                         errorHandler: { (url, error) -> Bool in
             print("File enumerator error at \(url): ", error)
             return true} ) {
-            // try using a TaskGroup
+            // Use a TaskGroup so that we can run file searches in parallel
             let results = try await withThrowingTaskGroup(of: (String, Bool).self, returning: [String: Bool].self) { taskgroup in
-                for case let fileURL as URL in file_enumerator {
+                for case let fileURL as URL in file_enumerator { // enumerate all files underneath search path
                     guard let resourceValues = try? fileURL.resourceValues(forKeys: resourceKeys),
                           let isDirectory = resourceValues.isDirectory,
                           let name = resourceValues.name,
@@ -52,14 +51,14 @@ struct searchFiles: AsyncParsableCommand {
                     else {
                         continue
                     }
-                    // determine which type of URL we are accessing
+                    // determine which type of file we are accessing
                     if isDirectory {
                         if name == "_extras" {
                             file_enumerator.skipDescendants()
                         }
-                    } else if isRegularFile {
+                    } else if isRegularFile { // only search regular files
 //                        print("File to search: \(fileURL.path()) with size \(fileSize) before addTask")
-                        taskgroup.addTask  {
+                        taskgroup.addTask  { // add a new task for each file to search
                             let filePath = fileURL.path()
                                 let foundString = try await searchLineByLine(from: fileURL, with: searchString)
 //                                if foundString {
@@ -69,7 +68,7 @@ struct searchFiles: AsyncParsableCommand {
                         }
                     }
                 }
-                // return results from TaskGroup here
+                // aggregate results from TaskGroup here after waiting for child tasks to complete
                 var childTaskResults = [String: Bool]()
                 for try await result in taskgroup {
                     childTaskResults[result.0] = result.1
@@ -79,7 +78,6 @@ struct searchFiles: AsyncParsableCommand {
             // Iterate through found results
             print("Files containing '\(searchString)' in \(actualPath):")
             results.filter({$0.value == true}).forEach { print($0.key) }
-//            results.forEach { print($0) }
         } else {
             print("**** File Enumerator was nil !!!")
         }
@@ -87,6 +85,8 @@ struct searchFiles: AsyncParsableCommand {
     
 }
 
+// search a file for text using asynchronous handle.bytes.lines feature for processing a file without
+// reading it entirely into a String first
 func searchLineByLine(from fileUrl: URL, with searchString: String) async throws -> Bool {
     var found: Bool = false
     do {
@@ -99,7 +99,7 @@ func searchLineByLine(from fileUrl: URL, with searchString: String) async throws
         }
         try handle.close()
     } catch {
-        print("*** searchLineByLine getting file handle error \(error)")
+        print("*** searchLineByLine getting file handle error or reading file error: \(error)")
     }
     return found
 }
