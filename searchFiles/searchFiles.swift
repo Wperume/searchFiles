@@ -17,7 +17,7 @@ struct searchFiles: AsyncParsableCommand { // use AsyncParsableCommand so that w
     mutating func run() async throws {
         let fileManager = FileManager.default
         let pwd = fileManager.currentDirectoryPath
-//        print("The current path is \(pwd)")
+//        print("The current path is \(pwd)") 
         
         var actualPath: String = pwd
         if let argString = path {
